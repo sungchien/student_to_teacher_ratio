@@ -82,7 +82,7 @@
     <div id="header">優久大學聯盟成員學校生師比統計</div>
     <div id="main">
         <div id="left-panel">
-            <div class="chart-title">各校生師比動態排名 (106-114學年度)</div>
+            <div class="chart-title">各校生師比動態排名</div>
             <div id="bcr-container"></div>
         </div>
         <div id="right-panel">
@@ -96,27 +96,70 @@
         </div>
     </div>
     <script>
-        const data = [
-            { name: "東吳大學", values: [31.35, 30.36, 29.96, 30.63, 30.85, 31.07, 32.12, 32.63, 31.30], color: "#E53935" },
-            { name: "中國文化大學", values: [31.95, 31.59, 31.17, 31.96, 32.16, 30.35, 28.96, 28.31, 28.83], color: "#FFD700" },
-            { name: "世新大學", values: [32.45, 30.89, 30.71, 29.50, 29.80, 29.10, 28.50, 28.00, 27.50], color: "#8C0B2F" },
-            { name: "淡江大學", values: [31.37, 31.14, 31.00, 31.20, 31.50, 31.30, 31.40, 31.10, 31.20], color: "#DB1921" },
-            { name: "銘傳大學", values: [31.10, 31.67, 31.66, 31.47, 32.77, 31.49, 31.81, 31.61, 31.84], color: "#003574" },
-            { name: "輔仁大學", values: [29.83, 27.69, 27.61, 27.49, 27.56, 28.29, 28.43, 28.83, 29.19], color: "#FFE100" },
-            { name: "實踐大學", values: [30.55, 31.44, 31.50, 31.20, 30.80, 30.50, 30.10, 29.80, 29.50], color: "#269C3D" },
-            { name: "大同大學", values: [25.10, 25.30, 25.50, 25.20, 25.00, 24.80, 24.50, 24.30, 24.10], color: "#90EE90" },
-            { name: "台北醫學大學", values: [15.20, 15.00, 14.80, 14.50, 14.30, 14.00, 13.80, 13.50, 13.20], color: "#8F2827" },
-            { name: "中原大學", values: [28.50, 28.30, 28.10, 28.00, 27.80, 27.50, 27.30, 27.00, 26.80], color: "#002D62" },
-            { name: "逢甲大學", values: [29.10, 29.00, 28.80, 28.50, 28.30, 28.00, 27.80, 27.50, 27.20], color: "#7D212A" },
-            { name: "靜宜大學", values: [27.50, 27.30, 27.10, 27.00, 26.80, 26.50, 26.30, 26.00, 25.80], color: "#6ABBBB" },
-            { name: "東海大學", values: [26.80, 26.50, 26.30, 26.00, 25.80, 25.50, 25.30, 25.00, 24.80], color: "#005AB5" }
-        ];
-        const years = [106, 107, 108, 109, 110, 111, 112, 113, 114];
+        // 1. 定義顏色對應表 (指定之 Hex 色碼)
+        const colorMap = {
+            "東吳大學": "#E53935",
+            "中國文化大學": "#FFD700",
+            "世新大學": "#8C0B2F",
+            "淡江大學": "#DB1921",
+            "銘傳大學": "#003574",
+            "輔仁大學": "#FFE100",
+            "實踐大學": "#269C3D",
+            "大同大學": "#90EE90",
+            "台北醫學大學": "#8F2827",
+            "中原大學": "#002D62",
+            "逢甲大學": "#7D212A",
+            "靜宜大學": "#6ABBBB",
+            "東海大學": "#005AB5"
+        };
+
+        let data = [];
+        let years = [];
+        let currentYearIndex = 0;
+        let ticker;
+        const tickDuration = 1000;
         
-        // Populate select
-        const select = d3.select("#uni-select");
-        data.forEach(d => {
-            select.append("option").attr("value", d.name).text(d.name);
+        // 2. 讀取外部 CSV 檔案
+        d3.csv("student_teacher_ratio.csv").then(function(rawData) {
+            // 萃取所有不重複的學年度並排序
+            const yearsSet = new Set();
+            rawData.forEach(d => {
+                if(d["學年度"]) yearsSet.add(+d["學年度"]);
+            });
+            years = Array.from(yearsSet).sort((a, b) => a - b);
+
+            // 萃取所有出現的學校名稱
+            const schools = Array.from(new Set(rawData.map(d => d["學校名稱"]).filter(Boolean)));
+            
+            // 將扁平資料轉換為圖表所需的巢狀陣列
+            data = schools.map(school => {
+                const schoolData = rawData.filter(d => d["學校名稱"] === school);
+                const valueMap = new Map(schoolData.map(d => [+d["學年度"], +d["日間生師比"]]));
+                
+                return {
+                    name: school,
+                    values: years.map(y => valueMap.get(y) || 0), // 若該年無資料則預設為 0
+                    color: colorMap[school] || "#999999" // 若為未來新增的學校，預設為灰色
+                };
+            });
+
+            // 寫入下拉式選單選項
+            const select = d3.select("#uni-select");
+            data.forEach(d => {
+                select.append("option").attr("value", d.name).text(d.name);
+            });
+
+            // 啟動圖表初始化邏輯
+            init();
+            
+        }).catch(function(error) {
+            console.error("載入 CSV 發生錯誤:", error);
+            d3.select("#bcr-container").html(
+                "<p style='color:red; text-align:center; padding-top: 20px;'>" +
+                "無法載入 student_teacher_ratio.csv。<br>" +
+                "請確保檔案名稱與欄位正確 (需包含：學年度、學校名稱、日間生師比)。<br>" +
+                "註：若您是直接點擊開啟 HTML (file:///)，瀏覽器可能會因 CORS 安全政策阻擋讀取，請使用 Local Web Server (如 VS Code 的 Live Server) 開啟網頁。</p>"
+            );
         });
 
         const margin = {top: 20, right: 30, bottom: 40, left: 100};
@@ -131,7 +174,7 @@
             };
         }
 
-        // --- Line Chart ---
+        // --- 折線圖 (Line Chart) 模組 ---
         let lineSvg, xLine, yLine;
         function drawLineChart() {
             const dim = getDim("line-container");
@@ -144,10 +187,14 @@
                 .attr("transform", `translate(${margin.left},${margin.top})`);
             
             xLine = d3.scaleLinear().domain(d3.extent(years)).range([0, dim.width]);
-            yLine = d3.scaleLinear().domain([10, 35]).range([dim.height, 0]);
+            
+            // 動態計算 Y 軸邊界
+            const maxRatio = d3.max(data, d => d3.max(d.values)) || 35;
+            const minRatio = d3.min(data, d => d3.min(d.values)) || 10;
+            yLine = d3.scaleLinear().domain([Math.max(0, minRatio - 5), maxRatio + 2]).range([dim.height, 0]);
 
             lineSvg.append("g").attr("transform", `translate(0,${dim.height})`)
-                .call(d3.axisBottom(xLine).tickFormat(d3.format("d")).ticks(9))
+                .call(d3.axisBottom(xLine).tickFormat(d3.format("d")).ticks(years.length))
                 .attr("class", "axis");
             lineSvg.append("g").call(d3.axisLeft(yLine)).attr("class", "axis");
 
@@ -176,13 +223,8 @@
             }
         }
 
-        // --- Bar Chart Race ---
-        let bcrSvg, xBcr, yBcr, yearText;
-        let currentYearIndex = 0;
-        let ticker;
-        const tickDuration = 1000;
-        const topN = 13;
-        let dimBcr;
+        // --- 動態長條圖 (Bar Chart Race) 模組 ---
+        let bcrSvg, xBcr, yBcr, yearText, dimBcr;
 
         function drawBarChartRace() {
             dimBcr = getDim("bcr-container");
@@ -205,16 +247,18 @@
         }
 
         function updateBarChart(yearIndex) {
+            // 提取當年度資料並排序，適應未來可能的資料量增減
+            const currentTopN = Math.min(15, data.length); 
             const yearData = data.map(d => ({
                 name: d.name,
                 value: d.values[yearIndex],
                 color: d.color
-            })).sort((a, b) => b.value - a.value).slice(0, topN);
+            })).sort((a, b) => b.value - a.value).slice(0, currentTopN);
 
             yearData.forEach((d, i) => d.rank = i);
 
-            xBcr.domain([0, d3.max(yearData, d => d.value)]);
-            yBcr.domain(d3.range(topN));
+            xBcr.domain([0, d3.max(yearData, d => d.value) + 2]);
+            yBcr.domain(d3.range(currentTopN));
 
             yearText.text(years[yearIndex] + " 學年度");
 
@@ -223,7 +267,7 @@
             bars.enter().append("rect")
                 .attr("class", "bar")
                 .attr("x", 0)
-                .attr("y", d => dimBcr.height)
+                .attr("y", dimBcr.height)
                 .attr("width", d => xBcr(d.value))
                 .attr("height", yBcr.bandwidth())
                 .attr("fill", d => d.color)
@@ -242,7 +286,7 @@
             labels.enter().append("text")
                 .attr("class", "label")
                 .attr("x", -5)
-                .attr("y", d => dimBcr.height)
+                .attr("y", dimBcr.height)
                 .attr("text-anchor", "end")
                 .attr("alignment-baseline", "middle")
                 .attr("fill", "#111")
@@ -261,7 +305,7 @@
             values.enter().append("text")
                 .attr("class", "value")
                 .attr("x", d => xBcr(d.value) + 5)
-                .attr("y", d => dimBcr.height)
+                .attr("y", dimBcr.height)
                 .attr("alignment-baseline", "middle")
                 .attr("fill", "#111")
                 .attr("font-size", "12px")
@@ -273,7 +317,6 @@
                 .attr("x", d => xBcr(d.value) + 5)
                 .attr("y", d => yBcr(d.rank) + yBcr.bandwidth() / 2)
                 .tween("text", function(d) {
-                    // Store intermediate values for smooth text transition
                     const i = d3.interpolateRound(parseFloat(this.textContent), d.value);
                     return function(t) { this.textContent = d.value.toFixed(2); };
                 });
@@ -299,7 +342,7 @@
             }, tickDuration);
         }
 
-        // Events
+        // --- 事件監聽器 (Event Listeners) ---
         d3.select("#uni-select").on("change", function() {
             updateLineChart(this.value);
         });
@@ -307,12 +350,12 @@
         d3.select("#reset-btn").on("click", () => {
             d3.select("#uni-select").property("value", "all");
             updateLineChart("all");
-            init();
+            init(); // 重置並重新播放動畫
         });
 
-        // Run
-        setTimeout(init, 100);
+        // 確保視窗縮放時，圖表尺寸能隨之重繪
         window.addEventListener("resize", () => {
+            if (data.length === 0) return; // 確保 CSV 資料已成功載入
             drawLineChart();
             updateLineChart(d3.select("#uni-select").property("value"));
             drawBarChartRace();
