@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>優久大學聯盟成員學校生師比統計</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { 
+            background-color: #FFFFF0; 
+            color: #111111; 
+            font-family: sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+        }
+        #header { 
+            height: 15vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 24px; 
+            font-weight: bold; 
+            border-bottom: 1px solid #ccc; 
+        }
+        #main { 
+            height: 85vh; 
+            display: flex; 
+            flex-direction: row; 
+        }
+        #left-panel, #right-panel { 
+            width: 50%; 
+            padding: 20px; 
+            box-sizing: border-box; 
+            display: flex; 
+            flex-direction: column; 
+        }
+        #left-panel { 
+            border-right: 1px solid #ccc; 
+        }
+        .chart-title { 
+            text-align: center; 
+            font-weight: bold; 
+            margin-bottom: 10px; 
+            font-size: 18px;
+        }
+        .controls { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            gap: 15px; 
+            margin-bottom: 10px; 
+        }
+        #bcr-container, #line-container { 
+            flex-grow: 1; 
+            position: relative; 
+            width: 100%; 
+            height: 100%; 
+        }
+        select, button { 
+            font-size: 16px; 
+            padding: 5px; 
+        }
+        .year-label { 
+            font-size: 48px; 
+            font-weight: bold; 
+            fill: #ccc; 
+            text-anchor: end; 
+        }
+        .axis path, .axis line { 
+            stroke: #111111; 
+        }
+        .axis text { 
+            fill: #111111; 
+            font-size: 12px; 
+        }
+    </style>
+</head>
+<body>
+    <div id="header">優久大學聯盟成員學校生師比統計</div>
+    <div id="main">
+        <div id="left-panel">
+            <div class="chart-title">各校生師比動態排名 (106-114學年度)</div>
+            <div id="bcr-container"></div>
+        </div>
+        <div id="right-panel">
+            <div class="chart-title">個別大學歷年生師比趨勢</div>
+            <div class="controls">
+                <label for="uni-select">選擇大學：</label>
+                <select id="uni-select"><option value="all">-- 顯示所有大學 --</option></select>
+                <button id="reset-btn">Reset</button>
+            </div>
+            <div id="line-container"></div>
+        </div>
+    </div>
+    <script>
+        const data = [
+            { name: "東吳大學", values: [31.35, 30.36, 29.96, 30.63, 30.85, 31.07, 32.12, 32.63, 31.30], color: "#E53935" },
+            { name: "中國文化大學", values: [31.95, 31.59, 31.17, 31.96, 32.16, 30.35, 28.96, 28.31, 28.83], color: "#FFD700" },
+            { name: "世新大學", values: [32.45, 30.89, 30.71, 29.50, 29.80, 29.10, 28.50, 28.00, 27.50], color: "#8C0B2F" },
+            { name: "淡江大學", values: [31.37, 31.14, 31.00, 31.20, 31.50, 31.30, 31.40, 31.10, 31.20], color: "#DB1921" },
+            { name: "銘傳大學", values: [31.10, 31.67, 31.66, 31.47, 32.77, 31.49, 31.81, 31.61, 31.84], color: "#003574" },
+            { name: "輔仁大學", values: [29.83, 27.69, 27.61, 27.49, 27.56, 28.29, 28.43, 28.83, 29.19], color: "#FFE100" },
+            { name: "實踐大學", values: [30.55, 31.44, 31.50, 31.20, 30.80, 30.50, 30.10, 29.80, 29.50], color: "#269C3D" },
+            { name: "大同大學", values: [25.10, 25.30, 25.50, 25.20, 25.00, 24.80, 24.50, 24.30, 24.10], color: "#90EE90" },
+            { name: "台北醫學大學", values: [15.20, 15.00, 14.80, 14.50, 14.30, 14.00, 13.80, 13.50, 13.20], color: "#8F2827" },
+            { name: "中原大學", values: [28.50, 28.30, 28.10, 28.00, 27.80, 27.50, 27.30, 27.00, 26.80], color: "#002D62" },
+            { name: "逢甲大學", values: [29.10, 29.00, 28.80, 28.50, 28.30, 28.00, 27.80, 27.50, 27.20], color: "#7D212A" },
+            { name: "靜宜大學", values: [27.50, 27.30, 27.10, 27.00, 26.80, 26.50, 26.30, 26.00, 25.80], color: "#6ABBBB" },
+            { name: "東海大學", values: [26.80, 26.50, 26.30, 26.00, 25.80, 25.50, 25.30, 25.00, 24.80], color: "#005AB5" }
+        ];
+        const years = [106, 107, 108, 109, 110, 111, 112, 113, 114];
+        
+        // Populate select
+        const select = d3.select("#uni-select");
+        data.forEach(d => {
+            select.append("option").attr("value", d.name).text(d.name);
+        });
+
+        const margin = {top: 20, right: 30, bottom: 40, left: 100};
+        
+        function getDim(nodeId) {
+            const node = document.getElementById(nodeId);
+            return {
+                w: node.clientWidth,
+                h: node.clientHeight,
+                width: node.clientWidth - margin.left - margin.right,
+                height: node.clientHeight - margin.top - margin.bottom
+            };
+        }
+
+        // --- Line Chart ---
+        let lineSvg, xLine, yLine;
+        function drawLineChart() {
+            const dim = getDim("line-container");
+            d3.select("#line-container").selectAll("*").remove();
+            
+            lineSvg = d3.select("#line-container").append("svg")
+                .attr("width", dim.w)
+                .attr("height", dim.h)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+            
+            xLine = d3.scaleLinear().domain(d3.extent(years)).range([0, dim.width]);
+            yLine = d3.scaleLinear().domain([10, 35]).range([dim.height, 0]);
+
+            lineSvg.append("g").attr("transform", `translate(0,${dim.height})`)
+                .call(d3.axisBottom(xLine).tickFormat(d3.format("d")).ticks(9))
+                .attr("class", "axis");
+            lineSvg.append("g").call(d3.axisLeft(yLine)).attr("class", "axis");
+
+            const lineGen = d3.line()
+                .x((d, i) => xLine(years[i]))
+                .y(d => yLine(d));
+
+            data.forEach(d => {
+                lineSvg.append("path")
+                    .datum(d.values)
+                    .attr("class", "line-path")
+                    .attr("id", "line-" + d.name.replace(/ /g, ''))
+                    .attr("fill", "none")
+                    .attr("stroke", d.color)
+                    .attr("stroke-width", 2)
+                    .attr("d", lineGen);
+            });
+        }
+
+        function updateLineChart(selected) {
+            if (selected === "all") {
+                d3.selectAll(".line-path").attr("opacity", 1).attr("stroke-width", 2);
+            } else {
+                d3.selectAll(".line-path").attr("opacity", 0.1).attr("stroke-width", 1);
+                d3.select("#line-" + selected.replace(/ /g, '')).attr("opacity", 1).attr("stroke-width", 4);
+            }
+        }
+
+        // --- Bar Chart Race ---
+        let bcrSvg, xBcr, yBcr, yearText;
+        let currentYearIndex = 0;
+        let ticker;
+        const tickDuration = 1000;
+        const topN = 13;
+        let dimBcr;
+
+        function drawBarChartRace() {
+            dimBcr = getDim("bcr-container");
+            d3.select("#bcr-container").selectAll("*").remove();
+            
+            bcrSvg = d3.select("#bcr-container").append("svg")
+                .attr("width", dimBcr.w)
+                .attr("height", dimBcr.h)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+            
+            xBcr = d3.scaleLinear().range([0, dimBcr.width]);
+            yBcr = d3.scaleBand().range([0, dimBcr.height]).padding(0.1);
+            
+            yearText = bcrSvg.append("text")
+                .attr("class", "year-label")
+                .attr("x", dimBcr.width)
+                .attr("y", dimBcr.height - 10)
+                .text("");
+        }
+
+        function updateBarChart(yearIndex) {
+            const yearData = data.map(d => ({
+                name: d.name,
+                value: d.values[yearIndex],
+                color: d.color
+            })).sort((a, b) => b.value - a.value).slice(0, topN);
+
+            yearData.forEach((d, i) => d.rank = i);
+
+            xBcr.domain([0, d3.max(yearData, d => d.value)]);
+            yBcr.domain(d3.range(topN));
+
+            yearText.text(years[yearIndex] + " 學年度");
+
+            const bars = bcrSvg.selectAll(".bar").data(yearData, d => d.name);
+            
+            bars.enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", 0)
+                .attr("y", d => dimBcr.height)
+                .attr("width", d => xBcr(d.value))
+                .attr("height", yBcr.bandwidth())
+                .attr("fill", d => d.color)
+                .transition().duration(tickDuration)
+                .attr("y", d => yBcr(d.rank));
+
+            bars.transition().duration(tickDuration).ease(d3.easeLinear)
+                .attr("width", d => xBcr(d.value))
+                .attr("y", d => yBcr(d.rank));
+
+            bars.exit().transition().duration(tickDuration)
+                .attr("width", 0).attr("y", dimBcr.height).remove();
+
+            const labels = bcrSvg.selectAll(".label").data(yearData, d => d.name);
+            
+            labels.enter().append("text")
+                .attr("class", "label")
+                .attr("x", -5)
+                .attr("y", d => dimBcr.height)
+                .attr("text-anchor", "end")
+                .attr("alignment-baseline", "middle")
+                .attr("fill", "#111")
+                .attr("font-size", "12px")
+                .text(d => d.name)
+                .transition().duration(tickDuration)
+                .attr("y", d => yBcr(d.rank) + yBcr.bandwidth() / 2);
+
+            labels.transition().duration(tickDuration).ease(d3.easeLinear)
+                .attr("y", d => yBcr(d.rank) + yBcr.bandwidth() / 2);
+                
+            labels.exit().remove();
+            
+            const values = bcrSvg.selectAll(".value").data(yearData, d => d.name);
+            
+            values.enter().append("text")
+                .attr("class", "value")
+                .attr("x", d => xBcr(d.value) + 5)
+                .attr("y", d => dimBcr.height)
+                .attr("alignment-baseline", "middle")
+                .attr("fill", "#111")
+                .attr("font-size", "12px")
+                .text(d => d.value.toFixed(2))
+                .transition().duration(tickDuration)
+                .attr("y", d => yBcr(d.rank) + yBcr.bandwidth() / 2);
+
+            values.transition().duration(tickDuration).ease(d3.easeLinear)
+                .attr("x", d => xBcr(d.value) + 5)
+                .attr("y", d => yBcr(d.rank) + yBcr.bandwidth() / 2)
+                .tween("text", function(d) {
+                    // Store intermediate values for smooth text transition
+                    const i = d3.interpolateRound(parseFloat(this.textContent), d.value);
+                    return function(t) { this.textContent = d.value.toFixed(2); };
+                });
+                
+            values.exit().remove();
+        }
+
+        function init() {
+            drawLineChart();
+            drawBarChartRace();
+            
+            if(ticker) ticker.stop();
+            currentYearIndex = 0;
+            updateBarChart(currentYearIndex);
+            
+            ticker = d3.interval(() => {
+                currentYearIndex++;
+                if (currentYearIndex >= years.length) {
+                    ticker.stop();
+                    return;
+                }
+                updateBarChart(currentYearIndex);
+            }, tickDuration);
+        }
+
+        // Events
+        d3.select("#uni-select").on("change", function() {
+            updateLineChart(this.value);
+        });
+
+        d3.select("#reset-btn").on("click", () => {
+            d3.select("#uni-select").property("value", "all");
+            updateLineChart("all");
+            init();
+        });
+
+        // Run
+        setTimeout(init, 100);
+        window.addEventListener("resize", () => {
+            drawLineChart();
+            updateLineChart(d3.select("#uni-select").property("value"));
+            drawBarChartRace();
+            updateBarChart(currentYearIndex);
+        });
+
+    </script>
+</body>
+</html>
